@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NET-SNIFF | Packet Sniffer & Network Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+<base target="_blank">
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+    <div class="min-h-screen bg-slate-950 text-slate-200 p-6 font-sans">
+        <header class="mb-8 border-b border-slate-800 pb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-amber-400 tracking-tight">NET-SNIFF</h1>
+                    <p class="text-slate-500 text-sm mt-1">Packet Sniffer & Network Traffic Visualizer</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="startCapture()" id="capture-btn" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-4 py-2 rounded transition-colors font-mono">▶ START CAPTURE</button>
+                    <button onclick="stopCapture()" id="stop-btn" class="bg-red-900/50 text-red-400 text-xs px-4 py-2 rounded border border-red-800 opacity-50 cursor-not-allowed" disabled>■ STOP</button>
+                    <span class="px-3 py-2 rounded-full bg-slate-800 text-slate-400 text-xs font-mono border border-slate-700" id="packet-count">0 packets</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Packet List -->
+            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+                <div class="p-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Captured Packets</h2>
+                    <div class="flex gap-2">
+                        <select id="filter-protocol" class="bg-slate-800 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300" onchange="filterPackets()">
+                            <option value="all">All Protocols</option>
+                            <option value="TCP">TCP</option>
+                            <option value="UDP">UDP</option>
+                            <option value="ICMP">ICMP</option>
+                            <option value="HTTP">HTTP</option>
+                        </select>
+                        <button onclick="clearCapture()" class="bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs px-3 py-1 rounded transition-colors">Clear</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-950 text-slate-500 text-xs uppercase sticky top-0">
+                            <tr>
+                                <th class="text-left p-3 w-16">#</th>
+                                <th class="text-left p-3">Time</th>
+                                <th class="text-left p-3">Source</th>
+                                <th class="text-left p-3">Destination</th>
+                                <th class="text-center p-3">Proto</th>
+                                <th class="text-center p-3">Len</th>
+                                <th class="text-left p-3">Info</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packet-table" class="divide-y divide-slate-800">
+                            <tr><td colspan="7" class="p-8 text-center text-slate-600 text-sm">Click "Start Capture" to begin monitoring network traffic</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Side Panel -->
+            <div class="space-y-6">
+                <!-- Protocol Distribution -->
+                <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Protocol Distribution</h3>
+                    <div class="space-y-3" id="proto-bars">
+                        <div class="flex items-center gap-2"><span class="text-xs text-slate-400 w-12">TCP</span><div class="flex-1 bg-slate-800 rounded-full h-2"><div class="bg-amber-500 h-full rounded-full" style="width:0%"></div></div><span class="text-xs text-slate-500 w-8 text-right">0</span></div>
+                        <div class="flex items-center gap-2"><span class="text-xs text-slate-400 w-12">UDP</span><div class="flex-1 bg-slate-800 rounded-full h-2"><div class="bg-cyan-500 h-full rounded-full" style="width:0%"></div></div><span class="text-xs text-slate-500 w-8 text-right">0</span></div>
+                        <div class="flex items-center gap-2"><span class="text-xs text-slate-400 w-12">ICMP</span><div class="flex-1 bg-slate-800 rounded-full h-2"><div class="bg-red-500 h-full rounded-full" style="width:0%"></div></div><span class="text-xs text-slate-500 w-8 text-right">0</span></div>
+                        <div class="flex items-center gap-2"><span class="text-xs text-slate-400 w-12">HTTP</span><div class="flex-1 bg-slate-800 rounded-full h-2"><div class="bg-emerald-500 h-full rounded-full" style="width:0%"></div></div><span class="text-xs text-slate-500 w-8 text-right">0</span></div>
+                    </div>
+                </div>
+
+                <!-- Packet Details -->
+                <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Packet Inspector</h3>
+                    <div id="packet-details" class="font-mono text-xs space-y-2 text-slate-500">
+                        <div class="text-center py-4">Select a packet to inspect</div>
+                    </div>
+                </div>
+
+                <!-- Network Stats -->
+                <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Traffic Stats</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs"><span class="text-slate-500">Total Bytes</span><span id="total-bytes" class="font-mono text-amber-400">0 B</span></div>
+                        <div class="flex justify-between text-xs"><span class="text-slate-500">Avg Packet Size</span><span id="avg-size" class="font-mono text-cyan-400">0 B</span></div>
+                        <div class="flex justify-between text-xs"><span class="text-slate-500">Capture Rate</span><span id="capture-rate" class="font-mono text-emerald-400">0 pkt/s</span></div>
+                        <div class="flex justify-between text-xs"><span class="text-slate-500">Top Source</span><span id="top-source" class="font-mono text-slate-400">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Hex Dump -->
+                <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Hex Dump</h3>
+                    <div id="hex-dump" class="font-mono text-xs text-slate-600 bg-slate-950 rounded p-3 h-32 overflow-y-auto">
+                        <div class="text-center py-8">No packet selected</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TCP/IP Stack Visualization -->
+        <div class="mt-6 bg-slate-900 border border-slate-800 rounded-lg p-6">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">TCP/IP Stack Visualization</h3>
+            <div class="flex items-center justify-center gap-2 flex-wrap" id="tcp-stack">
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 text-center w-32 opacity-40 transition-all" id="layer-app">
+                    <div class="text-lg mb-1">🌐</div>
+                    <div class="text-xs font-semibold text-slate-300">Application</div>
+                    <div class="text-xs text-slate-500 mt-1">HTTP/DNS</div>
+                </div>
+                <div class="text-slate-600 text-xl">→</div>
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 text-center w-32 opacity-40 transition-all" id="layer-transport">
+                    <div class="text-lg mb-1">📦</div>
+                    <div class="text-xs font-semibold text-slate-300">Transport</div>
+                    <div class="text-xs text-slate-500 mt-1">TCP/UDP</div>
+                </div>
+                <div class="text-slate-600 text-xl">→</div>
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 text-center w-32 opacity-40 transition-all" id="layer-network">
+                    <div class="text-lg mb-1">🗺️</div>
+                    <div class="text-xs font-semibold text-slate-300">Network</div>
+                    <div class="text-xs text-slate-500 mt-1">IP/ICMP</div>
+                </div>
+                <div class="text-slate-600 text-xl">→</div>
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 text-center w-32 opacity-40 transition-all" id="layer-link">
+                    <div class="text-lg mb-1">🔗</div>
+                    <div class="text-xs font-semibold text-slate-300">Data Link</div>
+                    <div class="text-xs text-slate-500 mt-1">Ethernet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let packets = [];
+        let captureInterval = null;
+        let isCapturing = false;
+        let packetCounter = 0;
+        let startTime = null;
+
+        const protocols = ['TCP', 'UDP', 'ICMP', 'HTTP'];
+        const ports = { 'TCP': [80, 443, 22, 21, 25, 110], 'UDP': [53, 67, 68, 123, 161], 'ICMP': [0], 'HTTP': [80, 8080, 3000] };
+        const services = { 80: 'HTTP', 443: 'HTTPS', 22: 'SSH', 21: 'FTP', 25: 'SMTP', 110: 'POP3', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 123: 'NTP', 161: 'SNMP', 8080: 'HTTP-Alt', 3000: 'Dev-Server' };
+
+        function randomIP() {
+            return `${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}`;
+        }
+
+        function generatePacket() {
+            const proto = protocols[Math.floor(Math.random() * protocols.length)];
+            const portList = ports[proto];
+            const port = portList[Math.floor(Math.random() * portList.length)];
+            const srcIP = randomIP();
+            const dstIP = Math.random() > 0.5 ? '192.168.1.1' : randomIP();
+            const size = Math.floor(Math.random() * 1400) + 64;
+
+            let info = '';
+            if (proto === 'TCP') {
+                const flags = ['SYN', 'ACK', 'SYN-ACK', 'FIN', 'RST'];
+                info = `${services[port] || 'Unknown'} [${flags[Math.floor(Math.random()*flags.length)]}] Seq=${Math.floor(Math.random()*100000)}`;
+            } else if (proto === 'UDP') {
+                info = `${services[port] || 'Unknown'} Len=${size}`;
+            } else if (proto === 'ICMP') {
+                const types = ['Echo Request', 'Echo Reply', 'Time Exceeded', 'Destination Unreachable'];
+                info = `Type=${Math.floor(Math.random()*16)} (${types[Math.floor(Math.random()*types.length)]})`;
+            } else if (proto === 'HTTP') {
+                const methods = ['GET', 'POST', 'PUT', 'DELETE'];
+                const paths = ['/api/users', '/login', '/dashboard', '/assets/style.css', '/api/data'];
+                info = `${methods[Math.floor(Math.random()*methods.length)]} ${paths[Math.floor(Math.random()*paths.length)]} HTTP/1.1`;
+            }
+
+            return {
+                id: ++packetCounter,
+                time: new Date().toISOString().split('T')[1].split('.')[0] + '.' + String(Math.floor(Math.random()*999)).padStart(3,'0'),
+                src: srcIP,
+                dst: dstIP,
+                proto: proto,
+                length: size,
+                info: info,
+                srcPort: Math.floor(Math.random()*65535),
+                dstPort: port,
+                ttl: Math.floor(Math.random()*128) + 64,
+                checksum: '0x' + Math.floor(Math.random()*0xFFFF).toString(16).padStart(4,'0'),
+                hexData: generateHexDump(size)
+            };
+        }
+
+        function generateHexDump(size) {
+            let hex = '';
+            const bytes = Math.min(size, 64);
+            for (let i = 0; i < bytes; i++) {
+                if (i % 16 === 0) hex += `0000${i.toString(16).padStart(4,'0')}  `;
+                hex += Math.floor(Math.random()*256).toString(16).padStart(2,'0') + ' ';
+                if ((i + 1) % 16 === 0) hex += '\n';
+            }
+            return hex;
+        }
+
+        function startCapture() {
+            if (isCapturing) return;
+            isCapturing = true;
+            startTime = Date.now();
+
+            document.getElementById('capture-btn').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('capture-btn').disabled = true;
+            document.getElementById('stop-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('stop-btn').classList.add('bg-red-600', 'hover:bg-red-500');
+
+            if (packets.length === 0) {
+                document.getElementById('packet-table').innerHTML = '';
+            }
+
+            captureInterval = setInterval(() => {
+                const count = Math.floor(Math.random() * 3) + 1;
+                for (let i = 0; i < count; i++) {
+                    const pkt = generatePacket();
+                    packets.push(pkt);
+                    addPacketToTable(pkt);
+                }
+                updateStats();
+                updateProtocolBars();
+            }, 800);
+        }
+
+        function stopCapture() {
+            isCapturing = false;
+            clearInterval(captureInterval);
+
+            document.getElementById('capture-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('capture-btn').disabled = false;
+            document.getElementById('stop-btn').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('stop-btn').disabled = true;
+            document.getElementById('stop-btn').classList.remove('bg-red-600', 'hover:bg-red-500');
+        }
+
+        function addPacketToTable(pkt) {
+            const tbody = document.getElementById('packet-table');
+            const protoColors = { 'TCP': 'text-amber-400', 'UDP': 'text-cyan-400', 'ICMP': 'text-red-400', 'HTTP': 'text-emerald-400' };
+
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-800/50 transition-colors cursor-pointer group';
+            row.onclick = () => inspectPacket(pkt.id);
+            row.innerHTML = `
+                <td class="p-3 font-mono text-slate-500 text-xs">${pkt.id}</td>
+                <td class="p-3 font-mono text-slate-400 text-xs">${pkt.time}</td>
+                <td class="p-3 font-mono text-slate-300 text-xs">${pkt.src}:${pkt.srcPort}</td>
+                <td class="p-3 font-mono text-slate-300 text-xs">${pkt.dst}:${pkt.dstPort}</td>
+                <td class="p-3 text-center"><span class="font-mono font-bold ${protoColors[pkt.proto] || 'text-slate-400'}">${pkt.proto}</span></td>
+                <td class="p-3 text-center font-mono text-slate-400 text-xs">${pkt.length}</td>
+                <td class="p-3 text-slate-400 text-xs truncate max-w-xs">${pkt.info}</td>
+            `;
+
+            tbody.insertBefore(row, tbody.firstChild);
+
+            while (tbody.children.length > 50) {
+                tbody.removeChild(tbody.lastChild);
+            }
+
+            document.getElementById('packet-count').textContent = `${packets.length} packets`;
+        }
+
+        function inspectPacket(id) {
+            const pkt = packets.find(p => p.id === id);
+            if (!pkt) return;
+
+            document.getElementById('packet-details').innerHTML = `
+                <div class="bg-slate-950 rounded p-3 border border-slate-800">
+                    <div class="text-amber-400 font-semibold mb-2">Frame ${pkt.id} (${pkt.length} bytes)</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div><span class="text-slate-500">Source MAC:</span> <span class="text-cyan-400">aa:bb:cc:${Math.floor(Math.random()*99)}:${Math.floor(Math.random()*99)}:${Math.floor(Math.random()*99)}</span></div>
+                        <div><span class="text-slate-500">Dest MAC:</span> <span class="text-cyan-400">dd:ee:ff:${Math.floor(Math.random()*99)}:${Math.floor(Math.random()*99)}:${Math.floor(Math.random()*99)}</span></div>
+                        <div><span class="text-slate-500">Source IP:</span> <span class="text-emerald-400">${pkt.src}</span></div>
+                        <div><span class="text-slate-500">Dest IP:</span> <span class="text-emerald-400">${pkt.dst}</span></div>
+                        <div><span class="text-slate-500">Source Port:</span> <span class="text-amber-400">${pkt.srcPort}</span></div>
+                        <div><span class="text-slate-500">Dest Port:</span> <span class="text-amber-400">${pkt.dstPort}</span></div>
+                        <div><span class="text-slate-500">Protocol:</span> <span class="text-red-400">${pkt.proto}</span></div>
+                        <div><span class="text-slate-500">TTL:</span> <span class="text-slate-300">${pkt.ttl}</span></div>
+                        <div><span class="text-slate-500">Checksum:</span> <span class="text-slate-300">${pkt.checksum}</span></div>
+                        <div><span class="text-slate-500">Length:</span> <span class="text-slate-300">${pkt.length} bytes</span></div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('hex-dump').innerHTML = `<pre class="text-slate-400">${pkt.hexData}</pre>`;
+
+            document.getElementById('layer-link').classList.remove('opacity-40');
+            document.getElementById('layer-link').classList.add('border-amber-500', 'bg-amber-900/20');
+            document.getElementById('layer-network').classList.remove('opacity-40');
+            document.getElementById('layer-network').classList.add('border-amber-500', 'bg-amber-900/20');
+            document.getElementById('layer-transport').classList.remove('opacity-40');
+            document.getElementById('layer-transport').classList.add('border-amber-500', 'bg-amber-900/20');
+            if (pkt.proto === 'HTTP') {
+                document.getElementById('layer-app').classList.remove('opacity-40');
+                document.getElementById('layer-app').classList.add('border-amber-500', 'bg-amber-900/20');
+            }
+        }
+
+        function updateStats() {
+            const totalBytes = packets.reduce((a, b) => a + b.length, 0);
+            const avgSize = packets.length > 0 ? Math.round(totalBytes / packets.length) : 0;
+            const elapsed = startTime ? (Date.now() - startTime) / 1000 : 1;
+            const rate = elapsed > 0 ? (packets.length / elapsed).toFixed(1) : 0;
+
+            const srcCounts = {};
+            packets.forEach(p => { srcCounts[p.src] = (srcCounts[p.src] || 0) + 1; });
+            const topSrc = Object.entries(srcCounts).sort((a,b) => b[1]-a[1])[0];
+
+            document.getElementById('total-bytes').textContent = formatBytes(totalBytes);
+            document.getElementById('avg-size').textContent = avgSize + ' B';
+            document.getElementById('capture-rate').textContent = rate + ' pkt/s';
+            document.getElementById('top-source').textContent = topSrc ? topSrc[0] : '-';
+        }
+
+        function updateProtocolBars() {
+            const counts = { 'TCP': 0, 'UDP': 0, 'ICMP': 0, 'HTTP': 0 };
+            packets.forEach(p => { if (counts[p.proto] !== undefined) counts[p.proto]++; });
+            const max = Math.max(...Object.values(counts), 1);
+
+            const colors = { 'TCP': 'bg-amber-500', 'UDP': 'bg-cyan-500', 'ICMP': 'bg-red-500', 'HTTP': 'bg-emerald-500' };
+            const container = document.getElementById('proto-bars');
+            container.innerHTML = Object.entries(counts).map(([proto, count]) => `
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400 w-12">${proto}</span>
+                    <div class="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div class="${colors[proto]} h-full rounded-full transition-all duration-500" style="width: ${(count/max)*100}%"></div>
+                    </div>
+                    <span class="text-xs text-slate-500 w-8 text-right">${count}</span>
+                </div>
+            `).join('');
+        }
+
+        function filterPackets() {
+            const filter = document.getElementById('filter-protocol').value;
+            const tbody = document.getElementById('packet-table');
+            const filtered = filter === 'all' ? packets.slice(-50) : packets.filter(p => p.proto === filter).slice(-50);
+
+            tbody.innerHTML = filtered.map(pkt => {
+                const protoColors = { 'TCP': 'text-amber-400', 'UDP': 'text-cyan-400', 'ICMP': 'text-red-400', 'HTTP': 'text-emerald-400' };
+                return `
+                    <tr class="hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="inspectPacket(${pkt.id})">
+                        <td class="p-3 font-mono text-slate-500 text-xs">${pkt.id}</td>
+                        <td class="p-3 font-mono text-slate-400 text-xs">${pkt.time}</td>
+                        <td class="p-3 font-mono text-slate-300 text-xs">${pkt.src}:${pkt.srcPort}</td>
+                        <td class="p-3 font-mono text-slate-300 text-xs">${pkt.dst}:${pkt.dstPort}</td>
+                        <td class="p-3 text-center"><span class="font-mono font-bold ${protoColors[pkt.proto] || 'text-slate-400'}">${pkt.proto}</span></td>
+                        <td class="p-3 text-center font-mono text-slate-400 text-xs">${pkt.length}</td>
+                        <td class="p-3 text-slate-400 text-xs truncate max-w-xs">${pkt.info}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function clearCapture() {
+            packets = [];
+            packetCounter = 0;
+            document.getElementById('packet-table').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-600 text-sm">Click "Start Capture" to begin monitoring network traffic</td></tr>';
+            document.getElementById('packet-count').textContent = '0 packets';
+            document.getElementById('packet-details').innerHTML = '<div class="text-center py-4">Select a packet to inspect</div>';
+            document.getElementById('hex-dump').innerHTML = '<div class="text-center py-8">No packet selected</div>';
+            updateProtocolBars();
+            updateStats();
+
+            ['layer-app', 'layer-transport', 'layer-network', 'layer-link'].forEach(id => {
+                document.getElementById(id).classList.add('opacity-40');
+                document.getElementById(id).classList.remove('border-amber-500', 'bg-amber-900/20');
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            return (bytes/(1024*1024)).toFixed(1) + ' MB';
+        }
+    </script>
+</body>
+</html>
